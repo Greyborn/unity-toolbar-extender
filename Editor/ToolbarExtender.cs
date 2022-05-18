@@ -1,8 +1,10 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Assertions;
 
 namespace UnityToolbarExtender
 {
@@ -17,17 +19,18 @@ namespace UnityToolbarExtender
 
 		static ToolbarExtender()
 		{
+			const BindingFlags BindingFlags = BindingFlags.NonPublic | BindingFlags.Static;
+
 			Type toolbarType = typeof(Editor).Assembly.GetType("UnityEditor.Toolbar");
-			
+
 #if UNITY_2019_1_OR_NEWER
 			string fieldName = "k_ToolCount";
 #else
 			string fieldName = "s_ShownToolIcons";
 #endif
-			
-			FieldInfo toolIcons = toolbarType.GetField(fieldName,
-				BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
-			
+
+			FieldInfo toolIcons = toolbarType.GetField(fieldName, BindingFlags);
+
 #if UNITY_2019_3_OR_NEWER
 			m_toolCount = toolIcons != null ? ((int) toolIcons.GetValue(null)) : 8;
 #elif UNITY_2019_1_OR_NEWER
@@ -37,7 +40,15 @@ namespace UnityToolbarExtender
 #else
 			m_toolCount = toolIcons != null ? ((Array) toolIcons.GetValue(null)).Length : 5;
 #endif
-	
+
+#if UNITY_2018_3_OR_NEWER
+			fiSubToolbars = toolbarType.GetField("s_SubToolbars", BindingFlags);
+			Assert.IsNotNull(fiSubToolbars);
+
+			var typeSubToolbar = typeof(Editor).Assembly.GetType("UnityEditor.SubToolbar");
+			piSubToolbarWidth = typeSubToolbar.GetProperty("Width");
+#endif
+
 			ToolbarCallback.OnToolbarGUI = OnGUI;
 			ToolbarCallback.OnToolbarGUILeft = GUILeft;
 			ToolbarCallback.OnToolbarGUIRight = GUIRight;
@@ -55,6 +66,29 @@ namespace UnityToolbarExtender
 		public const float playPauseStopWidth = 140;
 #else
 		public const float playPauseStopWidth = 100;
+#endif
+
+#if UNITY_2018_3_OR_NEWER
+		/// <summary>
+		/// <see cref="List{T}"/> where T is <see cref="UnityEditor.SubToolbar"/>
+		/// </summary>
+		private static readonly FieldInfo fiSubToolbars;
+
+		/// <summary>
+		/// float
+		/// </summary>
+		private static readonly PropertyInfo piSubToolbarWidth;
+
+		/// <summary>
+		/// Get the <see cref="IList"/> interface to a <see cref="List{T}"/> where T is a
+		/// <see cref="UnityEditor.SubToolbar"/> (reflected type).
+		/// </summary>
+		private static IList SubToolbars => (IList)fiSubToolbars.GetValue(null);
+
+		private static float SubToolbarWidth(object subToolbar)
+		{
+			return (float)piSubToolbarWidth.GetValue(subToolbar);
+		}
 #endif
 
 		public static void GUILeft()
@@ -82,35 +116,50 @@ namespace UnityToolbarExtender
 			// Following calculations match code reflected from Toolbar.OldOnGUI()
 			float playButtonsPosition = Mathf.RoundToInt ((screenWidth - playPauseStopWidth) / 2);
 
+			// Reserve space at the left for internal controls,
+			// and then clamp where the play controls begin.
 			Rect leftRect = new Rect(0, 0, screenWidth, Screen.height);
-			leftRect.xMin += space; // Spacing left
-			leftRect.xMin += buttonWidth * m_toolCount; // Tool buttons
+			leftRect.xMin += space;
+			leftRect.xMin += buttonWidth * m_toolCount; // Transform controls
 #if UNITY_2019_3_OR_NEWER
-			leftRect.xMin += space; // Spacing between tools and pivot
+			leftRect.xMin += space;
 #else
-			leftRect.xMin += largeSpace; // Spacing between tools and pivot
+			leftRect.xMin += largeSpace;
 #endif
-			leftRect.xMin += 64 * 2; // Pivot buttons
+			leftRect.xMin += 64 * 2; // Pivot controls
+#if UNITY_2019_3_OR_NEWER
+			leftRect.xMin += buttonWidth; // Snap control
+#endif
 			leftRect.xMax = playButtonsPosition;
 
+			// The area begins where the play controls end, and space
+			// is reserved at the right for internal controls.
 			Rect rightRect = new Rect(0, 0, screenWidth, Screen.height);
 			rightRect.xMin = playButtonsPosition;
-			rightRect.xMin += m_commandStyle.fixedWidth * 3; // Play buttons
+			rightRect.xMin += m_commandStyle.fixedWidth * 3; // Play controls
 			rightRect.xMax = screenWidth;
-			rightRect.xMax -= space; // Spacing right
+			rightRect.xMax -= space;
 			rightRect.xMax -= dropdownWidth; // Layout
-			rightRect.xMax -= space; // Spacing between layout and layers
+			rightRect.xMax -= space;
 			rightRect.xMax -= dropdownWidth; // Layers
-#if UNITY_2019_3_OR_NEWER
-			rightRect.xMax -= space; // Spacing between layers and account
+#if UNITY_2019_2_OR_NEWER
+			rightRect.xMax -= space;
 #else
-			rightRect.xMax -= largeSpace; // Spacing between layers and account
+			rightRect.xMax -= largeSpace;
 #endif
 			rightRect.xMax -= dropdownWidth; // Account
-			rightRect.xMax -= space; // Spacing between account and cloud
+			rightRect.xMax -= space;
 			rightRect.xMax -= buttonWidth; // Cloud
-			rightRect.xMax -= space; // Spacing between cloud and collab
+#if UNITY_2018_3_OR_NEWER
+			foreach (var subToolbar in SubToolbars)
+			{
+				rightRect.xMax -= space;
+				rightRect.xMax -= SubToolbarWidth(subToolbar);
+			}
+#else
+			rightRect.xMax -= space;
 			rightRect.xMax -= 78; // Colab
+#endif
 
 			// Add spacing around existing controls
 			leftRect.xMin += space;
