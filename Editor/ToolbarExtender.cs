@@ -57,6 +57,16 @@ namespace UnityToolbarExtender
 		public const float playPauseStopWidth = 100;
 #endif
 
+		public static void GUILeft()
+		{
+			DrawToolbar(LeftToolbarGUI);
+		}
+
+		public static void GUIRight()
+		{
+			DrawToolbar(RightToolbarGUI);
+		}
+
 		static void OnGUI()
 		{
 			// Create two containers, left and right
@@ -121,49 +131,31 @@ namespace UnityToolbarExtender
 			rightRect.height = 24;
 #endif
 
-			if (leftRect.width > 0)
-			{
-				GUILayout.BeginArea(leftRect);
-				GUILayout.BeginHorizontal();
-				foreach (var handler in LeftToolbarGUI)
-				{
-					handler();
-				}
-
-				GUILayout.EndHorizontal();
-				GUILayout.EndArea();
-			}
-
-			if (rightRect.width > 0)
-			{
-				GUILayout.BeginArea(rightRect);
-				GUILayout.BeginHorizontal();
-				foreach (var handler in RightToolbarGUI)
-				{
-					handler();
-				}
-
-				GUILayout.EndHorizontal();
-				GUILayout.EndArea();
-			}
+			DrawToolbar(leftRect, LeftToolbarGUI);
+			DrawToolbar(rightRect, RightToolbarGUI);
 		}
-		
-		public static void GUILeft() {
+
+		static void DrawToolbar(List<Action> toolbar)
+		{
 			GUILayout.BeginHorizontal();
-			foreach (var handler in LeftToolbarGUI)
+			foreach (var handler in toolbar)
 			{
 				handler();
 			}
+
 			GUILayout.EndHorizontal();
 		}
-		
-		public static void GUIRight() {
-			GUILayout.BeginHorizontal();
-			foreach (var handler in RightToolbarGUI)
+
+		static void DrawToolbar(Rect rect, List<Action> toolbar)
+		{
+			if (rect.width <= 0)
 			{
-				handler();
+				return;
 			}
-			GUILayout.EndHorizontal();
+
+			GUILayout.BeginArea(rect);
+			DrawToolbar(toolbar);
+			GUILayout.EndArea();
 		}
 	}
 }
